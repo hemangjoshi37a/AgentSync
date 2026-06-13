@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/agentsync-hero.jpg" alt="AgentSync — AnyDesk for Claude Code sessions" width="820">
+
 # AgentSync
 
 **AnyDesk for Claude Code sessions.**

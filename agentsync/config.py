@@ -40,6 +40,8 @@ class Policy:
     auto_accept_local: bool = True
     require_consent_remote: bool = True
     connection_password: str = ""
+    trust_all_remote: bool = False
+    trusted_nodes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -56,6 +58,7 @@ def _toml_escape(s: str) -> str:
 
 def _dump_toml(cfg: Config) -> str:
     p = cfg.policy
+    trusted = ", ".join('"' + _toml_escape(n) + '"' for n in p.trusted_nodes)
     return (
         f'node_id = "{_toml_escape(cfg.node_id)}"\n'
         f'label = "{_toml_escape(cfg.label)}"\n'
@@ -64,6 +67,8 @@ def _dump_toml(cfg: Config) -> str:
         f"auto_accept_local = {str(p.auto_accept_local).lower()}\n"
         f"require_consent_remote = {str(p.require_consent_remote).lower()}\n"
         f'connection_password = "{_toml_escape(p.connection_password)}"\n'
+        f"trust_all_remote = {str(p.trust_all_remote).lower()}\n"
+        f"trusted_nodes = [{trusted}]\n"
     )
 
 
@@ -102,6 +107,8 @@ def load_or_create() -> tuple[Config, crypto.PrivateKey]:
                 auto_accept_local=pol.get("auto_accept_local", True),
                 require_consent_remote=pol.get("require_consent_remote", True),
                 connection_password=pol.get("connection_password", ""),
+                trust_all_remote=pol.get("trust_all_remote", False),
+                trusted_nodes=list(pol.get("trusted_nodes", [])),
             ),
         )
     else:
