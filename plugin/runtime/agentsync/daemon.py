@@ -52,11 +52,12 @@ def _as_list(v: object) -> list[str]:
 class Session:
     """A connected local client (a Claude session or the control TUI)."""
 
-    def __init__(self, sid: str, writer: asyncio.StreamWriter, label: str, role: str) -> None:
+    def __init__(self, sid: str, writer: asyncio.StreamWriter, label: str, role: str, cwd: str = "") -> None:
         self.id = sid
         self.writer = writer
         self.label = label
         self.role = role
+        self.cwd = cwd
         self._lock = asyncio.Lock()
 
     async def send(self, obj: dict) -> None:
@@ -159,7 +160,7 @@ class Daemon:
         if c == "hello":
             self._counter += 1
             sid = f"s{self._counter}"
-            session = Session(sid, writer, str(cmd.get("label", "claude")), str(cmd.get("role", "session")))
+            session = Session(sid, writer, str(cmd.get("label", "claude")), str(cmd.get("role", "session")), str(cmd.get("cwd", "")))
             self.sessions[sid] = session
             await session.send({"event": "welcome", "session_id": sid, "node_id": self.node_id, "label": session.label})
             await self._broadcast_peers()
@@ -202,7 +203,7 @@ class Daemon:
 
     def _peers_payload(self) -> dict:
         local = [
-            {"session_id": s.id, "label": s.label}
+            {"session_id": s.id, "label": s.label, "cwd": s.cwd}
             for s in self.sessions.values()
             if s.role == "session"
         ]

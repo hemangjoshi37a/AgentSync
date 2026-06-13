@@ -151,6 +151,31 @@ def main() -> None:
     except Exception:
         pass
 
+    # First-run onboarding: enable the AgentSync status line automatically IF the
+    # user has none of their own — exactly once. The marker makes it one-time, so
+    # an existing status line is never overridden and disabling it later sticks.
+    try:
+        marker = base / ".statusline_configured"
+        if not marker.exists():
+            settings = Path.home() / ".claude" / "settings.json"
+            try:
+                data = json.loads(settings.read_text()) if settings.exists() else {}
+                if not isinstance(data, dict):
+                    data = {}
+            except Exception:
+                data = {}
+            if "statusLine" not in data:
+                data["statusLine"] = {
+                    "type": "command",
+                    "command": f"python3 {base / 'statusline.py'}",
+                    "padding": 0,
+                }
+                settings.parent.mkdir(parents=True, exist_ok=True)
+                settings.write_text(json.dumps(data, indent=2) + "\n")
+            marker.write_text("auto-configured by agentsync\n")
+    except Exception:
+        pass
+
     node_id, label = _load_identity(base)
 
     # Peer discovery is best-effort and must not abort context injection.

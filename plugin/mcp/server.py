@@ -152,7 +152,7 @@ class DaemonClient:
 
         # Send hello as the mandatory first message.
         await self._write_locked(
-            {"cmd": "hello", "label": self.label, "role": "session"}
+            {"cmd": "hello", "label": self.label, "role": "session", "cwd": os.getcwd()}
         )
 
         # Read the welcome event synchronously before starting the loop so the

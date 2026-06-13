@@ -266,6 +266,11 @@ def cmd_statusline_install(args) -> int:
         with open(settings, "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
+        # Mark as configured so the SessionStart hook won't re-toggle it.
+        try:
+            (C.CONFIG_DIR / ".statusline_configured").write_text("configured\n")
+        except OSError:
+            pass
 
     if args.uninstall:
         sl = data.get("statusLine")
