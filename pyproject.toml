@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentsync"
-version = "0.1.0"
+version = "0.1.1"
 description = "AnyDesk for Claude Code sessions — connect any two Claude Code sessions (local or remote) with a consent handshake and bidirectional, human-in-the-loop querying."
 readme = "README.md"
 requires-python = ">=3.11"
