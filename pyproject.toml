@@ -25,7 +25,6 @@ dependencies = [
   "textual>=0.60",
   "pynacl>=1.5",
   "rich>=13.0",
-  "mcp>=1.0",
 ]
 
 [project.optional-dependencies]

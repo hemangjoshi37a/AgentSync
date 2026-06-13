@@ -114,8 +114,8 @@ That's the entire setup. On session start the plugin **auto-starts a small backg
 daemon** (pure standard library — no `pip install`, no `agentsync up`), so any two Claude
 Code sessions on this machine can immediately reach each other. Just ask your session to
 use the `agentsync_*` tools (or `/agentsync-peers`, `/agentsync-ask <id> <question>`).
-The plugin's MCP server needs the `mcp` Python package importable by `python3`
-(see [docs/install.md](docs/install.md)).
+**No `pip install` needed** — the plugin is pure Python standard library and only
+requires `python3`, which Claude Code already has.
 
 **Remote (different machines)** needs a relay both can dial out to (AnyDesk-style). Install
 the CLI from source (for the relay + optional auto-responder), run a relay, and point each

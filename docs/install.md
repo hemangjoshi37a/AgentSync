@@ -108,18 +108,14 @@ from the bundled marketplace. Inside Claude Code:
 (`/plugin marketplace add` reads `.claude-plugin/marketplace.json` at the repo
 root, which points at the plugin in the `./plugin` subdirectory.)
 
-### Plugin requirement: the `mcp` Python package
+### No dependencies to install
 
-The plugin's MCP server is launched by Claude Code as
-`python3 ${CLAUDE_PLUGIN_ROOT}/mcp/server.py`. It is intentionally
-self-contained and depends **only** on the
-[`mcp`](https://pypi.org/project/mcp/) Python SDK plus the standard library, so
-the `python3` Claude Code uses must have `mcp` importable:
-
-```bash
-python3 -c "import mcp"      # should succeed; if not:
-pip install mcp
-```
+The plugin's MCP server (`python3 ${CLAUDE_PLUGIN_ROOT}/mcp/server.py`) and the
+auto-started daemon are **pure Python standard library** — they speak the MCP
+and AgentSync protocols directly. Installing the plugin is the only step: there
+is nothing to `pip install`, and `python3` (3.11+, already present wherever
+Claude Code runs) is the only requirement. On first tool use the plugin
+auto-starts the local daemon from its bundled runtime.
 
 ---
 
@@ -171,8 +167,9 @@ agentsync stop             # stop the running daemon
 
 - **`agentsync: command not found`** — the package isn't installed in the active
   environment. Re-run step 1, or run via the repo's virtualenv.
-- **Plugin MCP server fails to start** — run `python3 -c "import mcp"` with the
-  same `python3` Claude Code uses; install `mcp` if missing (step 4).
+- **Plugin MCP server fails to start** — it is pure stdlib, so this is almost
+  always a too-old `python3`. Check `python3 --version` is 3.11+, and run
+  `claude --debug` to see the MCP init error.
 - **Nodes can't reach each other** — confirm both ran `agentsync set-relay` with
   the **same** URL, the relay is listening, and the port (or your proxied
   `wss://` endpoint) is reachable from both machines.

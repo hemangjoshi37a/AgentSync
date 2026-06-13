@@ -10,9 +10,11 @@ It maintains a single persistent asyncio connection to the local AgentSync
 daemon over a Unix-domain socket and exposes the bridge as MCP tools.
 
 Design constraints:
-  * Depends ONLY on the ``mcp`` PyPI SDK + the Python standard library. It does
-    NOT import the ``agentsync`` package (that package is not installed where
-    the plugin runs), so the few protocol constants it needs are inlined here.
+  * Pure **standard library** — NO third-party dependencies (not even the
+    ``mcp`` SDK). It speaks the MCP stdio protocol (JSON-RPC 2.0, newline-
+    delimited) directly, and does NOT import the ``agentsync`` package. So
+    installing the plugin is the ONLY setup a user needs — ``python3`` is
+    already present wherever Claude Code runs.
   * stdout is the MCP JSON-RPC channel — all logging goes to **stderr**.
 
 Protocol (newline-delimited JSON over the Unix socket) is documented in
@@ -25,11 +27,10 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from pathlib import Path
 from typing import Any
-
-from mcp.server.fastmcp import FastMCP
 
 # --------------------------------------------------------------------------- #
 # Logging — stderr only. stdout belongs to the MCP JSON-RPC transport.
@@ -367,16 +368,12 @@ _client = DaemonClient(SOCKET_PATH, SESSION_LABEL)
 # --------------------------------------------------------------------------- #
 # MCP server + tools.
 # --------------------------------------------------------------------------- #
-mcp = FastMCP("agentsync-bridge")
-
-
 async def _connected_client() -> DaemonClient:
     """Return the singleton client, ensuring the daemon link is up."""
     await _client.ensure_connected()
     return _client
 
 
-@mcp.tool()
 async def agentsync_whoami() -> dict[str, Any]:
     """Identify this Claude session on the AgentSync network.
 
@@ -397,7 +394,6 @@ async def agentsync_whoami() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_peers() -> dict[str, Any]:
     """List the AgentSync peers currently reachable from this session.
 
@@ -420,7 +416,6 @@ async def agentsync_peers() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_connect(peer_id: str, timeout: float = 30) -> dict[str, Any]:
     """Open a bridge to a peer, performing the consent handshake if needed.
 
@@ -449,7 +444,6 @@ async def agentsync_connect(peer_id: str, timeout: float = 30) -> dict[str, Any]
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_ask(peer: str | list[str], prompt: str, timeout: float = 120) -> dict[str, Any]:
     """Ask one or more peers a question and wait for the answer(s).
 
@@ -490,7 +484,6 @@ async def agentsync_ask(peer: str | list[str], prompt: str, timeout: float = 120
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_send(
     to: str | list[str],
     body: str,
@@ -516,7 +509,6 @@ async def agentsync_send(
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_broadcast(
     body: str, exclude: str | list[str] | None = None
 ) -> dict[str, Any]:
@@ -549,7 +541,6 @@ async def agentsync_broadcast(
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_inbox() -> dict[str, Any]:
     """Retrieve incoming asks and messages delivered to this session.
 
@@ -573,7 +564,6 @@ async def agentsync_inbox() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_respond(
     request_id: str, answer: str, ok: bool = True
 ) -> dict[str, Any]:
@@ -604,7 +594,6 @@ async def agentsync_respond(
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
 async def agentsync_control(peer: str, action: str) -> dict[str, Any]:
     """Control an active bridge with a peer: pause, resume, or stop it.
 
@@ -629,10 +618,132 @@ async def agentsync_control(peer: str, action: str) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+# --------------------------------------------------------------------------- #
+# MCP stdio protocol (JSON-RPC 2.0, newline-delimited) — pure standard library.
+# --------------------------------------------------------------------------- #
+PROTOCOL_VERSION = "2024-11-05"
+SERVER_INFO = {"name": "agentsync-bridge", "version": "0.1.0"}
+
+# A parameter that accepts a single id or a list of ids (To/CC/BCC, multi-ask).
+_STR_OR_LIST = {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}
+
+
+def _tool(name: str, fn, properties: dict, required: list[str]) -> dict:
+    return {
+        "name": name,
+        "description": (fn.__doc__ or "").strip(),
+        "inputSchema": {"type": "object", "properties": properties, "required": required},
+    }
+
+
+TOOLS = [
+    _tool("agentsync_whoami", agentsync_whoami, {}, []),
+    _tool("agentsync_peers", agentsync_peers, {}, []),
+    _tool("agentsync_connect", agentsync_connect,
+          {"peer_id": {"type": "string"}, "timeout": {"type": "number"}}, ["peer_id"]),
+    _tool("agentsync_ask", agentsync_ask,
+          {"peer": _STR_OR_LIST, "prompt": {"type": "string"}, "timeout": {"type": "number"}},
+          ["peer", "prompt"]),
+    _tool("agentsync_send", agentsync_send,
+          {"to": _STR_OR_LIST, "body": {"type": "string"}, "cc": _STR_OR_LIST, "bcc": _STR_OR_LIST},
+          ["to", "body"]),
+    _tool("agentsync_broadcast", agentsync_broadcast,
+          {"body": {"type": "string"}, "exclude": _STR_OR_LIST}, ["body"]),
+    _tool("agentsync_inbox", agentsync_inbox, {}, []),
+    _tool("agentsync_respond", agentsync_respond,
+          {"request_id": {"type": "string"}, "answer": {"type": "string"}, "ok": {"type": "boolean"}},
+          ["request_id", "answer"]),
+    _tool("agentsync_control", agentsync_control,
+          {"peer": {"type": "string"},
+           "action": {"type": "string", "enum": ["pause", "resume", "stop"]}},
+          ["peer", "action"]),
+]
+
+
+async def _call_tool(name: str, args: dict[str, Any]) -> dict:
+    # Required args use subscript (KeyError -> reported as a tool error);
+    # optional args use .get with defaults.
+    if name == "agentsync_whoami":
+        return await agentsync_whoami()
+    if name == "agentsync_peers":
+        return await agentsync_peers()
+    if name == "agentsync_connect":
+        return await agentsync_connect(args["peer_id"], args.get("timeout", 30))
+    if name == "agentsync_ask":
+        return await agentsync_ask(args["peer"], args["prompt"], args.get("timeout", 120))
+    if name == "agentsync_send":
+        return await agentsync_send(args["to"], args["body"], args.get("cc"), args.get("bcc"))
+    if name == "agentsync_broadcast":
+        return await agentsync_broadcast(args["body"], args.get("exclude"))
+    if name == "agentsync_inbox":
+        return await agentsync_inbox()
+    if name == "agentsync_respond":
+        return await agentsync_respond(args["request_id"], args["answer"], args.get("ok", True))
+    if name == "agentsync_control":
+        return await agentsync_control(args["peer"], args["action"])
+    raise ValueError(f"unknown tool: {name}")
+
+
+async def _handle(req: dict) -> dict | None:
+    method = req.get("method")
+    rid = req.get("id")
+    params = req.get("params") or {}
+
+    if method == "initialize":
+        pv = params.get("protocolVersion") or PROTOCOL_VERSION
+        return {"jsonrpc": "2.0", "id": rid, "result": {
+            "protocolVersion": pv, "capabilities": {"tools": {}}, "serverInfo": SERVER_INFO,
+        }}
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": rid, "result": {"tools": TOOLS}}
+    if method == "tools/call":
+        name = params.get("name", "")
+        args = params.get("arguments") or {}
+        try:
+            result = await _call_tool(name, args)
+        except Exception as exc:  # noqa: BLE001 — surface as a tool error, don't crash
+            log.exception("tool %s failed", name)
+            result = {"ok": False, "error": str(exc)}
+        is_error = isinstance(result, dict) and result.get("ok") is False
+        return {"jsonrpc": "2.0", "id": rid, "result": {
+            "content": [{"type": "text", "text": json.dumps(result)}], "isError": is_error,
+        }}
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": rid, "result": {}}
+    if method and method.startswith("notifications/"):
+        return None  # notifications get no response
+    if rid is not None:
+        return {"jsonrpc": "2.0", "id": rid,
+                "error": {"code": -32601, "message": f"method not found: {method}"}}
+    return None
+
+
+async def _serve_stdio() -> None:
+    loop = asyncio.get_running_loop()
+    log.info("agentsync MCP server up (stdlib stdio; socket=%s label=%s)", SOCKET_PATH, SESSION_LABEL)
+    while True:
+        line = await loop.run_in_executor(None, sys.stdin.buffer.readline)
+        if not line:
+            break  # stdin closed → Claude Code went away
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except (ValueError, UnicodeDecodeError):
+            continue
+        try:
+            resp = await _handle(req)
+        except Exception:  # noqa: BLE001 — one bad request must not kill the server
+            log.exception("error handling request")
+            resp = None
+        if resp is not None:
+            sys.stdout.write(json.dumps(resp) + "\n")
+            sys.stdout.flush()
+
+
 if __name__ == "__main__":
-    log.info(
-        "starting agentsync MCP server (socket=%s label=%s)",
-        SOCKET_PATH,
-        SESSION_LABEL,
-    )
-    mcp.run()
+    try:
+        asyncio.run(_serve_stdio())
+    except KeyboardInterrupt:
+        pass

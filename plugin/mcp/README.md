@@ -1,72 +1,37 @@
 # AgentSync MCP server
 
-The MCP server that gives a Claude Code session the `agentsync_*` tools —
-"AnyDesk for Claude Code sessions". It is a thin, **self-contained** stdio
-bridge between Claude Code and the local AgentSync daemon: it speaks the
-newline-delimited JSON protocol documented in
-[`docs/PROTOCOL.md`](../../docs/PROTOCOL.md) over the daemon's Unix socket and
-re-exposes that bridge as MCP tools.
+`server.py` gives a Claude Code session the `agentsync_*` tools and bridges them
+to the local AgentSync daemon over a Unix-domain socket. It is a fully
+MCP-compliant stdio server.
 
-## How it is launched
+**Zero dependencies.** It is pure Python standard library — it speaks the MCP
+stdio protocol (JSON-RPC 2.0, newline-delimited) *directly* and does **not**
+require the `mcp` SDK or the `agentsync` package. The only requirement is
+`python3` (3.11+), which Claude Code already provides, so **installing the
+plugin is the only setup needed** — nothing to `pip install`.
 
-Claude Code starts it as part of the AgentSync plugin:
+Claude Code launches it as:
 
-```sh
-python3 ${CLAUDE_PLUGIN_ROOT}/mcp/server.py
-```
+    python3 ${CLAUDE_PLUGIN_ROOT}/mcp/server.py
 
-stdout is the MCP JSON-RPC channel; all logs go to **stderr**.
-
-## Dependency
-
-The **only** dependency is the official MCP Python SDK:
-
-```sh
-pip install mcp
-```
-
-(Plus the Python standard library; Python 3.11+.) This file intentionally does
-**not** import the `agentsync` package — it ships inside the plugin and must run
-in environments where only `mcp` is installed. The few protocol constants it
-needs are inlined.
-
-## Configuration (environment variables)
-
-| Variable           | Purpose                                                                                   | Default                     |
-|--------------------|-------------------------------------------------------------------------------------------|-----------------------------|
-| `AGENTSYNC_SOCKET` | Explicit path to the daemon's Unix socket. Takes precedence over everything below.        | —                           |
-| `AGENTSYNC_HOME`   | AgentSync home directory; the socket is `$AGENTSYNC_HOME/daemon.sock` when `..._SOCKET` is unset. | —                    |
-| `AGENTSYNC_LABEL`  | Human-readable label for this session.                                                    | basename of the working dir |
-| `AGENTSYNC_LOG_LEVEL` | Logging level (`DEBUG`, `INFO`, …), to stderr.                                         | `INFO`                      |
-
-Socket path resolution: `AGENTSYNC_SOCKET` → `$AGENTSYNC_HOME/daemon.sock` →
-`~/.agentsync/daemon.sock`.
+On first tool use it auto-starts the local daemon (from the bundled
+`plugin/runtime/`) if it isn't already running — no `agentsync up` required.
+The newline-delimited daemon protocol is documented in
+[`docs/PROTOCOL.md`](../../docs/PROTOCOL.md).
 
 ## Tools
+- `agentsync_whoami` — this session's node id / session id / label.
+- `agentsync_peers` — list connectable peers (local + remote).
+- `agentsync_connect(peer_id, timeout)` — connect to a peer (remote needs consent).
+- `agentsync_ask(peer, prompt, timeout)` — ask a peer (or a **list** of peers) and get the answer(s).
+- `agentsync_send(to, body, cc, bcc)` — selective message, email-style To/CC/BCC.
+- `agentsync_broadcast(body, exclude)` — message all connected peers.
+- `agentsync_inbox()` — pending asks + messages delivered to this session.
+- `agentsync_respond(request_id, answer, ok)` — answer an inbound ask.
+- `agentsync_control(peer, action)` — pause / resume / stop a bridge.
 
-| Tool | Description |
-|------|-------------|
-| `agentsync_whoami()` | Returns this session's `{node_id, session_id, label}`. |
-| `agentsync_peers()` | Returns reachable peers: `{local: [...], remote: [...]}` (fresh snapshot). |
-| `agentsync_connect(peer_id, timeout=30)` | Open a bridge to a peer (consent handshake for remote peers). Returns `{ok, peer, reason}`. |
-| `agentsync_ask(peer, prompt, timeout=120)` | Ask a peer and await the reply. Returns `{ok, body}` (or `{ok: False, error: "timeout"}`). |
-| `agentsync_send(peer, body)` | Fire-and-forget message to a peer. Returns `{ok: True}`. |
-| `agentsync_inbox()` | Returns `{asks, messages}`: pending asks are **peeked**, messages are **drained**. |
-| `agentsync_respond(request_id, answer, ok=True)` | Answer a pending inbound ask; removes it from the inbox. Returns `{ok: True}`. |
-| `agentsync_control(peer, action)` | Control an active bridge; `action` ∈ `{pause, resume, stop}`. Returns `{ok: True}`. |
-
-Peers are addressed by **`node_id`** (remote; always starts with `AS-`) or by
-**`session_id`** (local; a short token like `s1`). See `docs/PROTOCOL.md` for
-the full addressing and event model.
-
-## Behaviour notes
-
-- A single persistent connection to the daemon is established lazily on the
-  first tool call and **reconnects automatically** (re-sending `hello`) if it
-  drops.
-- A background reader task continuously dispatches daemon events: `reply`
-  events resolve the future for the matching `agentsync_ask`; inbound `ask`
-  events are appended to the inbox; `message` events are buffered for
-  `agentsync_inbox`; `connect_result` resolves the matching
-  `agentsync_connect`; `peers`/`status` update the cached snapshot.
-- Tools never raise: on failure they return `{"ok": False, "error": "..."}`.
+## Environment
+- `AGENTSYNC_SOCKET` — daemon socket path override.
+- `AGENTSYNC_HOME` — config/state dir (default `~/.agentsync`).
+- `AGENTSYNC_LABEL` — this session's label (default: cwd basename).
+- `AGENTSYNC_LOG_LEVEL` — stderr log level (default `INFO`).
