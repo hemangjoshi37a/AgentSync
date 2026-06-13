@@ -96,8 +96,9 @@ Three pieces, one repo:
 4. On accept, an encrypted session opens. Now `agentsync_ask` / messages flow both ways.
 5. Either side can **pause / resume / stop** from the TUI; the bridge tears down cleanly.
 
-**Local (same PC):** identical, except the daemon routes the two sessions to each other
-directly over the Unix socket — the relay isn't involved at all.
+**Local (same PC):** no relay and no `agentsync up` — just install the plugin in each
+session. The daemon auto-starts and routes the two sessions to each other directly over
+the Unix socket, and local peers auto-accept by default (no consent prompt).
 
 ## Quickstart
 
@@ -130,6 +131,64 @@ agentsync set-relay wss://your-relay:8787    # on each node
 Then, inside any Claude Code session, just ask it to *"connect to AS-…-B and ask them
 which file format their service expects"* — it uses the `agentsync_*` tools, the other
 side consents (once, or permanently via `agentsync trust <id>`), and the two agents talk.
+
+## Usage
+
+With the plugin installed, **just talk to your Claude Code session in plain language** —
+*"list my AgentSync peers"*, *"ask `AS-7K3F-9210` which API version they're on"*,
+*"send the build plan to `s2` and CC `s3`"*. Claude picks the right `agentsync_*` tool.
+There are also slash commands and a CLI for doing things by hand.
+
+**Slash commands (inside a session):**
+
+| Command | What it does |
+|---|---|
+| `/agentsync-peers` | List the sessions you can reach (local + remote). |
+| `/agentsync-connect <peer-id>` | Connect to a peer (remote peers must consent). |
+| `/agentsync-ask <peer-id> <question>` | Ask a peer and report its answer. |
+
+**Tools the model can call:**
+
+| Tool | Purpose |
+|---|---|
+| `agentsync_whoami` | Your node id, session id, label. |
+| `agentsync_peers` | List connectable peers. |
+| `agentsync_connect(peer_id)` | Open a bridge to a peer (consent for remote). |
+| `agentsync_ask(peer, prompt)` | Ask one peer — **or a list of peers** — and get the answer(s). |
+| `agentsync_send(to, body, cc, bcc)` | Selective message, email-style **To/CC/BCC** — only addressed sessions receive it. |
+| `agentsync_broadcast(body)` | Message every connected peer. |
+| `agentsync_inbox()` | Read questions/messages others sent you. |
+| `agentsync_respond(request_id, answer)` | Answer a question from your inbox. |
+| `agentsync_control(peer, action)` | `pause` / `resume` / `stop` a bridge. |
+
+**Addressing:** local peers (other sessions on this machine) are addressed by **session id**
+(`s1`, `s2`, …) and auto-accept; remote peers are addressed by **node id** (`AS-XXXX-XXXX`)
+and need consent once (or `agentsync trust` to make it permanent).
+
+**CLI** (available when installed from source — `pipx install .`):
+
+```bash
+agentsync up               # open the TUI console (the daemon auto-starts regardless)
+agentsync id               # your node id, label, relay, daemon status
+agentsync peers            # list peers
+agentsync connect <id>     # connect to a peer
+agentsync trust <id>       # permanently auto-accept a peer (untrust to revoke; --all for everyone)
+agentsync set-relay <url>  # set the relay used for remote connections
+agentsync stop             # stop the daemon
+```
+
+**Example — two sessions on one machine (zero setup):**
+1. Open two Claude Code sessions (both have the plugin, so both auto-register).
+2. In session A: *"use `agentsync_peers`, then ask the other session to summarize the file it's editing."*
+3. A calls `agentsync_peers` (sees session B), then `agentsync_ask(<B's session id>, …)`; B answers; A relays the reply. No relay, no manual daemon.
+
+**Unattended answering (optional):** to let a node answer peers automatically with no human
+present, run the headless responder — it runs a locked-down, read-only Claude
+(read [docs/security.md](docs/security.md) first):
+
+```bash
+agentsync-responder
+```
 
 ## Security model
 
