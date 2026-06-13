@@ -1,6 +1,5 @@
 {
   "name": "agentsync-marketplace",
-  "displayName": "AgentSync",
   "description": "AnyDesk for Claude Code sessions — connect any two Claude Code sessions (local or remote) with a consent handshake and bidirectional, human-in-the-loop querying.",
   "owner": {
     "name": "Hemang Joshi",

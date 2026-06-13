@@ -1,5 +1,5 @@
 ---
-description: Connect to an AgentSync peer by id. Usage: /agentsync-connect <peer-id>
+description: "Connect to an AgentSync peer by id. Usage: /agentsync-connect <peer-id>"
 allowed-tools: mcp__plugin_agentsync_bridge__agentsync_connect
 ---
 

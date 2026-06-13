@@ -1,5 +1,5 @@
 ---
-description: Ask an AgentSync peer a question. Usage: /agentsync-ask <peer-id> <question>
+description: "Ask an AgentSync peer a question. Usage: /agentsync-ask <peer-id> <question>"
 allowed-tools: mcp__plugin_agentsync_bridge__agentsync_ask
 ---
 
