@@ -38,6 +38,17 @@ def _is_remote(target: object) -> bool:
     return isinstance(target, str) and target.startswith("AS-")
 
 
+def _as_list(v: object) -> list[str]:
+    """Coerce None / a single id / a list into a list of recipient ids."""
+    if v is None:
+        return []
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, (list, tuple)):
+        return [str(x) for x in v]
+    return []
+
+
 class Session:
     """A connected local client (a Claude session or the control TUI)."""
 
@@ -250,16 +261,38 @@ class Daemon:
                 await self._relay_send(peer, P.reply(rid, body, ok))
 
     async def _handle_send(self, session: Session, cmd: dict) -> None:
-        target = cmd.get("target")
+        """Deliver a message to To/CC/BCC recipients (email-style selective send).
+
+        Only addressed sessions receive it; everyone else gets nothing (saving
+        their tokens). Recipients see the To/CC audience; BCC recipients receive
+        the body but are never listed in To/CC.
+        """
         body = str(cmd.get("body", ""))
-        if _is_remote(target):
-            peer = self.peers.get(target)  # type: ignore[arg-type]
-            if peer is not None and not peer.paused:
-                await self._relay_send(peer, P.msg(body))
-        else:
-            dest = self.sessions.get(target)  # type: ignore[arg-type]
-            if dest is not None:
-                await dest.send({"event": "message", "from": session.id, "from_label": session.label, "body": body})
+        to = _as_list(cmd.get("to"))
+        cc = _as_list(cmd.get("cc"))
+        bcc = _as_list(cmd.get("bcc"))
+        if not (to or cc or bcc) and cmd.get("target") is not None:
+            to = [str(cmd.get("target"))]  # backward-compat with single-target send
+
+        seen: set[str] = set()
+        recipients: list[str] = []
+        for r in (*to, *cc, *bcc):
+            if r and r != session.id and r not in seen:
+                seen.add(r)
+                recipients.append(r)
+
+        for r in recipients:
+            if _is_remote(r):
+                peer = self.peers.get(r)
+                if peer is not None and not peer.paused:
+                    await self._relay_send(peer, P.multicast(body, session.label, to, cc))
+            else:
+                dest = self.sessions.get(r)
+                if dest is not None:
+                    await dest.send({
+                        "event": "message", "from": session.id, "from_label": session.label,
+                        "to": to, "cc": cc, "body": body,
+                    })
 
     async def _handle_control(self, session: Session, cmd: dict) -> None:
         target = cmd.get("target")
@@ -490,7 +523,12 @@ class Daemon:
         elif t == P.MSG:
             for s in self.sessions.values():
                 if s.role == "session":
-                    await s.send({"event": "message", "from": peer.node_id, "from_label": peer.label, "body": msg.get("body", "")})
+                    await s.send({
+                        "event": "message", "from": peer.node_id,
+                        "from_label": msg.get("from_label", peer.label),
+                        "to": msg.get("to", []), "cc": msg.get("cc", []),
+                        "body": msg.get("body", ""),
+                    })
         elif t == P.CONTROL:
             action = str(msg.get("action", ""))
             if action == P.PAUSE:

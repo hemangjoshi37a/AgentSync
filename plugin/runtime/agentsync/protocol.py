@@ -126,5 +126,11 @@ def msg(body: str) -> dict:
     return {"type": MSG, "body": body}
 
 
+def multicast(body: str, from_label: str, to: list, cc: list) -> dict:
+    """A message carrying its visible audience (to/cc). BCC recipients still
+    receive this payload but are never listed in to/cc (privacy)."""
+    return {"type": MSG, "body": body, "from_label": from_label, "to": to, "cc": cc}
+
+
 def control(action: str) -> dict:
     return {"type": CONTROL, "action": action}

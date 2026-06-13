@@ -295,6 +295,8 @@ class DaemonClient:
                 {
                     "from": event.get("from"),
                     "from_label": event.get("from_label"),
+                    "to": event.get("to", []),
+                    "cc": event.get("cc", []),
                     "body": event.get("body"),
                 }
             )
@@ -448,55 +450,102 @@ async def agentsync_connect(peer_id: str, timeout: float = 30) -> dict[str, Any]
 
 
 @mcp.tool()
-async def agentsync_ask(peer: str, prompt: str, timeout: float = 120) -> dict[str, Any]:
-    """Ask a peer a question and wait for its answer (request/response).
+async def agentsync_ask(peer: str | list[str], prompt: str, timeout: float = 120) -> dict[str, Any]:
+    """Ask one or more peers a question and wait for the answer(s).
 
-    Sends ``prompt`` to ``peer`` (a local ``session_id`` or remote ``node_id``)
-    and blocks until that peer replies or ``timeout`` seconds elapse. The peer
-    sees the question in its inbox and answers via ``agentsync_respond``.
-    Returns ``{ok, body}`` with the answer text, or ``{ok: False, error:
-    "timeout"}`` if no reply arrives in time. For remote peers, ``connect``
-    first.
+    ``peer`` may be a single id (local ``session_id`` or remote ``node_id``) —
+    returns ``{ok, body}`` — or a LIST of ids — returns
+    ``{ok: True, answers: [{peer, ok, body}, ...]}`` (peers asked concurrently).
+    Blocks until each peer replies or ``timeout`` seconds elapse. Peers see the
+    question in their inbox and answer via ``agentsync_respond``. For remote
+    peers, ``connect`` first.
     """
     try:
         c = await _connected_client()
-        request_id = uuid.uuid4().hex
-        fut = c.new_reply_future(request_id)
-        await c.send(
-            {
-                "cmd": "ask",
-                "target": peer,
-                "prompt": prompt,
-                "request_id": request_id,
-            }
-        )
-        try:
-            reply = await asyncio.wait_for(fut, timeout=timeout)
-        except asyncio.TimeoutError:
-            c._reply_futures.pop(request_id, None)
-            return {"ok": False, "error": "timeout"}
-        return {"ok": bool(reply.get("ok", True)), "body": reply.get("body")}
+
+        async def _ask_one(target: str) -> dict[str, Any]:
+            request_id = uuid.uuid4().hex
+            fut = c.new_reply_future(request_id)
+            await c.send({"cmd": "ask", "target": target, "prompt": prompt, "request_id": request_id})
+            try:
+                reply = await asyncio.wait_for(fut, timeout=timeout)
+            except asyncio.TimeoutError:
+                c._reply_futures.pop(request_id, None)
+                return {"peer": target, "ok": False, "error": "timeout"}
+            return {"peer": target, "ok": bool(reply.get("ok", True)), "body": reply.get("body")}
+
+        if isinstance(peer, (list, tuple)):
+            answers = await asyncio.gather(*[_ask_one(str(p)) for p in peer])
+            return {"ok": True, "answers": list(answers)}
+
+        one = await _ask_one(str(peer))
+        result: dict[str, Any] = {"ok": one["ok"]}
+        if "body" in one:
+            result["body"] = one.get("body")
+        if "error" in one:
+            result["error"] = one["error"]
+        return result
     except Exception as exc:  # noqa: BLE001
         log.exception("agentsync_ask failed")
         return {"ok": False, "error": str(exc)}
 
 
 @mcp.tool()
-async def agentsync_send(peer: str, body: str) -> dict[str, Any]:
-    """Send a fire-and-forget message to a peer (no reply awaited).
+async def agentsync_send(
+    to: str | list[str],
+    body: str,
+    cc: str | list[str] | None = None,
+    bcc: str | list[str] | None = None,
+) -> dict[str, Any]:
+    """Send a message to one or more peers, email-style (To / CC / BCC).
 
-    Delivers ``body`` to ``peer`` (a local ``session_id`` or remote
-    ``node_id``). The peer picks it up via ``agentsync_inbox``. Use this for
-    notifications or one-way updates; use ``agentsync_ask`` when you need an
-    answer back. Returns ``{ok: True}`` once the message is handed to the
-    daemon.
+    ``to``, ``cc``, and ``bcc`` each accept a single peer id or a list of ids
+    (local ``session_id`` or remote ``node_id``). Only the addressed peers
+    receive the message — every other session gets nothing, saving their input
+    tokens and processing time. Recipients see the To and CC audience; BCC
+    recipients receive the body but are hidden from everyone (privacy). This is
+    fire-and-forget; use ``agentsync_ask`` when you need a reply. Returns
+    ``{ok: True}``.
     """
     try:
         c = await _connected_client()
-        await c.send({"cmd": "send", "target": peer, "body": body})
+        await c.send({"cmd": "send", "to": to, "cc": cc, "bcc": bcc, "body": body})
         return {"ok": True}
     except Exception as exc:  # noqa: BLE001
         log.exception("agentsync_send failed")
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+async def agentsync_broadcast(
+    body: str, exclude: str | list[str] | None = None
+) -> dict[str, Any]:
+    """Send a message to ALL currently-connected peers (local + remote).
+
+    Optionally ``exclude`` a peer id or list of ids. Returns
+    ``{ok: True, recipients: [...]}``. Prefer ``agentsync_send`` with an
+    explicit To/CC list when only some peers need the message — broadcasting
+    makes every connected session spend tokens reading it.
+    """
+    try:
+        c = await _connected_client()
+        snap = await c.request_peers()
+        ex = {exclude} if isinstance(exclude, str) else set(exclude or [])
+        targets: list[str] = []
+        for s in snap.get("local", []):
+            sid = s.get("session_id")
+            if sid and sid != c.session_id and sid not in ex:
+                targets.append(sid)
+        for p in snap.get("remote", []):
+            nid = p.get("node_id")
+            if nid and nid not in ex:
+                targets.append(nid)
+        if not targets:
+            return {"ok": True, "recipients": [], "note": "no connected peers"}
+        await c.send({"cmd": "send", "to": targets, "body": body})
+        return {"ok": True, "recipients": targets}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("agentsync_broadcast failed")
         return {"ok": False, "error": str(exc)}
 
 

@@ -39,7 +39,7 @@ and the CLI are all **clients** of the daemon and speak this protocol.
 | `connect` | `target` (node id or local session id) | Initiate a connection to a peer. |
 | `ask` | `target`, `prompt` (str), `request_id` (unique str) | Ask a peer a question. The answer returns as a `reply` event with the same `request_id`. |
 | `reply` | `request_id`, `body` (str), `ok` (bool) | Answer an inbound `ask` event that was delivered to this client. |
-| `send` | `target`, `body` (str) | Fire-and-forget message to a peer. |
+| `send` | `to`/`cc`/`bcc` (a peer id or list) **or** legacy `target`; `body` (str) | Selective message (email-style). Delivered to every addressed peer (union of to/cc/bcc, minus the sender); unaddressed sessions get nothing. Recipients see the To/CC audience; **BCC recipients receive the body but are never listed in To/CC**. |
 | `control` | `target`, `action` (`"pause"`\|`"resume"`\|`"stop"`) | Control an active bridge. |
 | `accept` | `request_id` | Consent: accept an `incoming_connect` (sent by the TUI/control client). |
 | `reject` | `request_id` | Consent: reject an `incoming_connect`. |
@@ -57,7 +57,7 @@ and the CLI are all **clients** of the daemon and speak this protocol.
 | `connected` | `peer`, `label` | A bridge is now active with `peer`. |
 | `ask` | `request_id`, `from`, `from_label`, `prompt` | A peer is asking you. Produce an answer via a `reply` command with the same `request_id`. |
 | `reply` | `request_id`, `ok` (bool), `body` | The answer to an `ask` you sent. |
-| `message` | `from`, `from_label`, `body` | A fire-and-forget message arrived. |
+| `message` | `from`, `from_label`, `to`, `cc`, `body` | A message arrived. `to`/`cc` are the visible audience (BCC recipients are omitted from both). |
 | `control` | `from`, `action` | A peer sent a pause/resume/stop. |
 | `peer_gone` | `peer` | A peer disconnected. |
 | `error` | `message` | Something went wrong (bad target, relay offline, etc.). |
