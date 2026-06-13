@@ -129,6 +129,19 @@ def _query_peers(sock_path: Path) -> list[str]:
 
 def main() -> None:
     base = _agentsync_home()
+
+    # Zero-setup: ensure the local daemon is running, starting it from the
+    # bundled runtime if needed — so installing the plugin is all the user does.
+    try:
+        runtime = Path(__file__).resolve().parent.parent / "runtime"
+        if str(runtime) not in sys.path:
+            sys.path.insert(0, str(runtime))
+        import bootstrap  # bundled in plugin/runtime/
+
+        bootstrap.ensure_daemon(runtime)
+    except Exception:
+        pass
+
     node_id, label = _load_identity(base)
 
     # Peer discovery is best-effort and must not abort context injection.

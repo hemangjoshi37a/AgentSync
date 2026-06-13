@@ -287,7 +287,7 @@ class Responder:
         """Connect, register, and serve inbound events forever (reconnecting)."""
         while True:
             try:
-                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                reader, writer = await asyncio.open_unix_connection(self._socket_path, limit=16 * 1024 * 1024)
             except (FileNotFoundError, ConnectionRefusedError, OSError) as exc:
                 log.info("daemon offline (%s); retrying in %.0fs", exc, RECONNECT_DELAY)
                 await asyncio.sleep(RECONNECT_DELAY)

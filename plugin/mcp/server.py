@@ -126,9 +126,26 @@ class DaemonClient:
                 return
             await self._connect_locked()
 
+    async def _ensure_daemon_running(self) -> None:
+        """Start the bundled daemon if the socket is not live (zero-setup)."""
+        try:
+            import sys as _sys
+            from pathlib import Path as _Path
+
+            runtime = _Path(__file__).resolve().parent.parent / "runtime"
+            if str(runtime) not in _sys.path:
+                _sys.path.insert(0, str(runtime))
+            import bootstrap  # bundled in plugin/runtime/
+
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, bootstrap.ensure_daemon, str(runtime))
+        except Exception as exc:  # never block tool use on bootstrap
+            log.warning("daemon bootstrap skipped: %s", exc)
+
     async def _connect_locked(self) -> None:
+        await self._ensure_daemon_running()
         log.info("connecting to daemon at %s", self.socket_path)
-        reader, writer = await asyncio.open_unix_connection(self.socket_path)
+        reader, writer = await asyncio.open_unix_connection(self.socket_path, limit=16 * 1024 * 1024)
         self._reader = reader
         self._writer = writer
 

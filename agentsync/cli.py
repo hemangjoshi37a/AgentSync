@@ -71,7 +71,7 @@ def ensure_daemon(timeout: float = 8.0) -> bool:
 # one-shot socket query helper (for peers / connect / status)
 # --------------------------------------------------------------------------- #
 async def _query(commands: list[dict], collect_event: str, timeout: float = 5.0) -> dict | None:
-    reader, writer = await asyncio.open_unix_connection(str(C.SOCKET_PATH))
+    reader, writer = await asyncio.open_unix_connection(str(C.SOCKET_PATH), limit=16 * 1024 * 1024)
     try:
         def _w(obj: dict) -> None:
             writer.write((json.dumps(obj) + "\n").encode())
@@ -95,7 +95,7 @@ async def _query(commands: list[dict], collect_event: str, timeout: float = 5.0)
 # subcommands
 # --------------------------------------------------------------------------- #
 def cmd_id(_args) -> int:
-    cfg, _ = C.load_or_create()
+    cfg = C.load_or_create()
     print(f"AgentSync node id : {cfg.node_id}")
     print(f"label             : {cfg.label}")
     print(f"relay             : {cfg.relay_url}")
@@ -105,7 +105,7 @@ def cmd_id(_args) -> int:
 
 
 def cmd_up(_args) -> int:
-    cfg, _ = C.load_or_create()
+    cfg = C.load_or_create()
     print(f"AgentSync node {cfg.node_id} ({cfg.label})")
     if not ensure_daemon():
         print(f"failed to start daemon; see {C.LOG_FILE}", file=sys.stderr)
@@ -121,9 +121,9 @@ def cmd_daemon(_args) -> int:
     from .daemon import Daemon
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    cfg, priv = C.load_or_create()
+    cfg = C.load_or_create()
     try:
-        asyncio.run(Daemon(cfg, priv).start())
+        asyncio.run(Daemon(cfg).start())
     except KeyboardInterrupt:
         pass
     return 0
@@ -182,7 +182,7 @@ def cmd_stop(_args) -> int:
 
 
 def cmd_set_relay(args) -> int:
-    cfg, _ = C.load_or_create()
+    cfg = C.load_or_create()
     cfg.relay_url = args.url
     C.save(cfg)
     print(f"relay set to {cfg.relay_url}")
@@ -217,7 +217,7 @@ def _set_trust(node: str | None, all_: bool, remove: bool) -> int:
                 print("trusted peers:", ", ".join(tn) if tn else "(none)")
         return 0
     # daemon not running — persist directly to config
-    cfg, _ = C.load_or_create()
+    cfg = C.load_or_create()
     pol = cfg.policy
     if all_:
         pol.trust_all_remote = not remove
