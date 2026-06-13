@@ -9,7 +9,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 dst="$here/plugin/runtime/agentsync"
 mkdir -p "$dst"
-for f in __init__ protocol config crypto daemon; do
+for f in __init__ protocol config crypto daemon statusline; do
   cp "$here/agentsync/$f.py" "$dst/$f.py"
 done
 echo "bundled agentsync runtime -> $dst"

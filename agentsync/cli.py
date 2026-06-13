@@ -239,6 +239,60 @@ def cmd_untrust(args) -> int:
     return _set_trust(args.node, args.all, remove=True)
 
 
+def cmd_statusline(_args) -> int:
+    from . import statusline
+    print(statusline.render())
+    return 0
+
+
+def cmd_statusline_install(args) -> int:
+    import shutil
+
+    from . import statusline as _sl
+
+    C.ensure_dir()
+    script = C.CONFIG_DIR / "statusline.py"
+    settings = os.path.expanduser("~/.claude/settings.json")
+    try:
+        with open(settings) as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+    except (FileNotFoundError, ValueError, OSError):
+        data = {}
+
+    def _save() -> None:
+        os.makedirs(os.path.dirname(settings), exist_ok=True)
+        with open(settings, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+
+    if args.uninstall:
+        sl = data.get("statusLine")
+        if isinstance(sl, dict) and "statusline.py" in str(sl.get("command", "")):
+            backup = data.pop("statusLine_agentsync_backup", None)
+            if backup is not None:
+                data["statusLine"] = backup
+            else:
+                data.pop("statusLine", None)
+            _save()
+            print("AgentSync status line removed.")
+        else:
+            print("no AgentSync status line is installed.")
+        return 0
+
+    shutil.copyfile(_sl.__file__, script)
+    existing = data.get("statusLine")
+    if isinstance(existing, dict) and "statusline.py" not in str(existing.get("command", "")):
+        data["statusLine_agentsync_backup"] = existing
+        print("note: saved your existing status line as statusLine_agentsync_backup.")
+    data["statusLine"] = {"type": "command", "command": f"python3 {script}", "padding": 0}
+    _save()
+    print(f"AgentSync status line enabled in {settings}.")
+    print("Open a new Claude Code session to see it in the status bar.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="agentsync", description="AnyDesk for Claude Code sessions.")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -267,6 +321,12 @@ def build_parser() -> argparse.ArgumentParser:
     pu.add_argument("node", nargs="?", help="peer node id to untrust (omit when using --all)")
     pu.add_argument("--all", action="store_true", help="disable trust-all-remote")
     pu.set_defaults(func=cmd_untrust)
+
+    sub.add_parser("statusline", help="print the AgentSync status line (used as a statusLine command)").set_defaults(func=cmd_statusline)
+
+    psi = sub.add_parser("statusline-install", help="enable the AgentSync status line in ~/.claude/settings.json")
+    psi.add_argument("--uninstall", action="store_true", help="remove it (restoring any previous status line)")
+    psi.set_defaults(func=cmd_statusline_install)
 
     return ap
 

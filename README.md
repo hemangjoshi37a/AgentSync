@@ -177,6 +177,12 @@ agentsync set-relay <url>  # set the relay used for remote connections
 agentsync stop             # stop the daemon
 ```
 
+**Status line (optional).** Show your AgentSync node id + connected machines permanently in
+the Claude Code status bar — run `/agentsync-statusline` inside a session (or
+`agentsync statusline-install` from the CLI; it preserves any status line you already have).
+It renders like `🔗 AS-7K3F-9210 · 2 local · ↔ gpu-box`. The node id is your machine's
+shareable address — another machine connects to you with `agentsync_connect("AS-7K3F-9210")`.
+
 **Example — two sessions on one machine (zero setup):**
 1. Open two Claude Code sessions (both have the plugin, so both auto-register).
 2. In session A: *"use `agentsync_peers`, then ask the other session to summarize the file it's editing."*

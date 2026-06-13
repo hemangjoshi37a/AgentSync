@@ -142,6 +142,15 @@ def main() -> None:
     except Exception:
         pass
 
+    # Keep a stable copy of the status-line script at ~/.agentsync/statusline.py
+    # so a configured statusLine command survives plugin updates. Best-effort.
+    try:
+        src = Path(__file__).resolve().parent.parent / "runtime" / "agentsync" / "statusline.py"
+        if src.exists():
+            (base / "statusline.py").write_text(src.read_text())
+    except Exception:
+        pass
+
     node_id, label = _load_identity(base)
 
     # Peer discovery is best-effort and must not abort context injection.
