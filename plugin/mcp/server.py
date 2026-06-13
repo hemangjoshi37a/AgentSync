@@ -804,7 +804,7 @@ async def agentsync_control(peer: str, action: str) -> dict[str, Any]:
 # MCP stdio protocol (JSON-RPC 2.0, newline-delimited) — pure standard library.
 # --------------------------------------------------------------------------- #
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "agentsync-bridge", "version": "0.1.0"}
+SERVER_INFO = {"name": "agentsync-bridge", "version": "0.1.1"}
 
 # A parameter that accepts a single id or a list of ids (To/CC/BCC, multi-ask).
 _STR_OR_LIST = {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}

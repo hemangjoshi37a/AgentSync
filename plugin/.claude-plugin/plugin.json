@@ -1,7 +1,7 @@
 {
   "name": "agentsync",
   "displayName": "AgentSync",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect this Claude Code session to others (local or remote) — ask peers questions and exchange messages, with consent and human-in-the-loop control.",
   "author": {
     "name": "Hemang Joshi",

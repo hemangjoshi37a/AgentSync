@@ -11,7 +11,7 @@
       "name": "agentsync",
       "source": "./plugin",
       "description": "Connect this Claude Code session to others (local or remote) — ask peers questions and exchange messages, with consent and human-in-the-loop control.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "Hemang Joshi",
         "email": "hemangjoshi37a@gmail.com"
