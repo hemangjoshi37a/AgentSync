@@ -144,6 +144,11 @@ the other machine — is powerful and must be treated as a real attack surface.
 
 - **Consent-gated.** Nothing connects without the receiver accepting. Optional per-node
   connection password / pre-shared key.
+- **Persistent trust (opt-in).** Accept a peer once with **"Always allow"** (or
+  `agentsync trust <id>`) and it's saved to `trusted_nodes` in your config — that peer
+  then auto-accepts across sessions and restarts, so a connection you permanently want
+  never re-prompts. `agentsync untrust <id>` revokes it; `agentsync trust --all` (use with
+  care) accepts every peer.
 - **End-to-end encrypted.** Peers exchange keys on consent (PyNaCl); the relay only sees
   ciphertext and routing metadata.
 - **Untrusted input.** All peer messages are treated as untrusted (prompt-injection

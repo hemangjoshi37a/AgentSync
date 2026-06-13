@@ -160,6 +160,8 @@ agentsync id               # print this node's id, label, relay, daemon status
 agentsync peers            # list connectable peers (local + remote)
 agentsync connect <id>     # connect to a peer by id
 agentsync set-relay <url>  # set + persist the relay URL
+agentsync trust <id>       # permanently trust a peer (auto-accept its connections)
+agentsync untrust <id>     # revoke trust  (both accept --all to (un)trust every peer)
 agentsync stop             # stop the running daemon
 ```
 

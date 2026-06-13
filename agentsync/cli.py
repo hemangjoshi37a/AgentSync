@@ -193,6 +193,52 @@ def cmd_set_relay(args) -> int:
     return 0
 
 
+def _set_trust(node: str | None, all_: bool, remove: bool) -> int:
+    if not all_ and not node:
+        print("specify a peer node id, or use --all")
+        return 1
+    verb = "untrusted" if remove else "trusted"
+    if _socket_live():
+        cmd: dict = {"cmd": "untrust" if remove else "trust"}
+        if all_:
+            cmd["all"] = True
+        else:
+            cmd["node"] = node
+        ev = asyncio.run(_query([cmd], "untrusted" if remove else "trusted"))
+        if ev is None:
+            print("no response from daemon")
+            return 1
+        if all_:
+            print("trust-all-remote " + ("disabled" if remove else "ENABLED — all peers auto-accept"))
+        else:
+            print(f"{verb} {node}")
+            tn = ev.get("trusted_nodes")
+            if tn is not None:
+                print("trusted peers:", ", ".join(tn) if tn else "(none)")
+        return 0
+    # daemon not running — persist directly to config
+    cfg, _ = C.load_or_create()
+    pol = cfg.policy
+    if all_:
+        pol.trust_all_remote = not remove
+    elif remove:
+        if node in pol.trusted_nodes:
+            pol.trusted_nodes.remove(node)
+    elif node and node not in pol.trusted_nodes:
+        pol.trusted_nodes.append(node)
+    C.save(cfg)
+    print(f"{verb} {'ALL remote peers' if all_ else node} (persisted; daemon not running)")
+    return 0
+
+
+def cmd_trust(args) -> int:
+    return _set_trust(args.node, args.all, remove=False)
+
+
+def cmd_untrust(args) -> int:
+    return _set_trust(args.node, args.all, remove=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="agentsync", description="AnyDesk for Claude Code sessions.")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -211,6 +257,16 @@ def build_parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("set-relay", help="set the rendezvous relay URL (persisted to config)")
     pr.add_argument("url", help="relay websocket URL, e.g. wss://relay.example:8787 or ws://127.0.0.1:8787")
     pr.set_defaults(func=cmd_set_relay)
+
+    pt = sub.add_parser("trust", help="permanently trust a peer so its connections auto-accept")
+    pt.add_argument("node", nargs="?", help="peer node id to trust (omit when using --all)")
+    pt.add_argument("--all", action="store_true", help="auto-accept ALL remote peers (use with caution)")
+    pt.set_defaults(func=cmd_trust)
+
+    pu = sub.add_parser("untrust", help="stop trusting a peer (or --all)")
+    pu.add_argument("node", nargs="?", help="peer node id to untrust (omit when using --all)")
+    pu.add_argument("--all", action="store_true", help="disable trust-all-remote")
+    pu.set_defaults(func=cmd_untrust)
 
     return ap
 

@@ -422,9 +422,11 @@ class AgentSyncApp(App[None]):
             self._log_line(f"[green]accepted[/green] {from_label} ([dim]{from_node}[/dim])")
         elif choice == "always":
             self._always_allow.add(from_node)
-            self._send({"cmd": "accept", "request_id": rid})
+            # remember=True persists this peer to the daemon's trusted_nodes, so
+            # future connections from it auto-accept across sessions and restarts.
+            self._send({"cmd": "accept", "request_id": rid, "remember": True})
             self._log_line(
-                f"[green]accepted + always allow[/green] {from_label} "
+                f"[green]accepted + always allow (saved)[/green] {from_label} "
                 f"([dim]{from_node}[/dim])"
             )
         else:  # "reject" or None (dismissed)

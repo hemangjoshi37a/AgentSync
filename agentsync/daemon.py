@@ -154,9 +154,13 @@ class Daemon:
         elif c == "control":
             await self._handle_control(session, cmd)
         elif c == "accept":
-            await self._handle_accept(str(cmd.get("request_id")))
+            await self._handle_accept(str(cmd.get("request_id")), bool(cmd.get("remember", False)))
         elif c == "reject":
             await self._handle_reject(str(cmd.get("request_id")), "rejected by user")
+        elif c == "trust":
+            await self._handle_trust(session, cmd)
+        elif c == "untrust":
+            await self._handle_untrust(session, cmd)
         else:
             await session.send({"event": "error", "message": f"unknown command {c!r}"})
         return session
@@ -290,27 +294,42 @@ class Daemon:
 
     # ---- consent (this node receives a request) -----------------------------
 
+    def _is_trusted(self, node: str) -> bool:
+        """A peer is auto-accepted if globally trusted or on the persisted list."""
+        pol = self.cfg.policy
+        return _auto_accept_remote() or pol.trust_all_remote or node in pol.trusted_nodes
+
     async def _on_connect_request(self, m: dict) -> None:
         rid = str(m["request_id"])
+        from_node = str(m.get("from_node", ""))
         self.pending_consent[rid] = m
+        # A persisted trusted peer (or global auto-accept) bypasses the prompt.
+        if self._is_trusted(from_node):
+            log.info("auto-accepting trusted peer %s", from_node)
+            await self._handle_accept(rid)
+            return
         controls = [s for s in self.sessions.values() if s.role == "control"]
-        if controls and self.cfg.policy.require_consent_remote and not _auto_accept_remote():
+        if controls and self.cfg.policy.require_consent_remote:
             for s in controls:
                 await s.send({
                     "event": "incoming_connect", "request_id": rid,
                     "from_node": m.get("from_node"), "from_label": m.get("from_label", ""),
                 })
-        elif self.cfg.policy.require_consent_remote and not _auto_accept_remote():
+        elif self.cfg.policy.require_consent_remote:
             # consent required but no TUI to grant it
             await self._handle_reject(rid, "no operator present to grant consent")
         else:
             await self._handle_accept(rid)
 
-    async def _handle_accept(self, rid: str) -> None:
+    async def _handle_accept(self, rid: str, remember: bool = False) -> None:
         m = self.pending_consent.pop(rid, None)
         if m is None:
             return
         frm = str(m["from_node"])
+        if remember and frm not in self.cfg.policy.trusted_nodes:
+            self.cfg.policy.trusted_nodes.append(frm)
+            C.save(self.cfg)
+            log.info("persisted trust for %s", frm)
         box = crypto.make_box(self.priv, m["from_pubkey"])
         self.peers[frm] = RemotePeer(frm, str(m.get("from_label", frm)), box)
         if self.relay_ws is not None:
@@ -328,6 +347,32 @@ class Daemon:
             await self.relay_ws.send(P.dumps(P.connect_response(
                 rid, str(m["from_node"]), str(m["from_node"]), False, None, reason,
             )))
+
+    async def _handle_trust(self, session: Session, cmd: dict) -> None:
+        pol = self.cfg.policy
+        if cmd.get("all"):
+            pol.trust_all_remote = True
+            C.save(self.cfg)
+            await session.send({"event": "trusted", "all": True})
+            return
+        node = str(cmd.get("node", ""))
+        if node and node not in pol.trusted_nodes:
+            pol.trusted_nodes.append(node)
+            C.save(self.cfg)
+        await session.send({"event": "trusted", "node": node, "trusted_nodes": pol.trusted_nodes})
+
+    async def _handle_untrust(self, session: Session, cmd: dict) -> None:
+        pol = self.cfg.policy
+        if cmd.get("all"):
+            pol.trust_all_remote = False
+            C.save(self.cfg)
+            await session.send({"event": "untrusted", "all": True})
+            return
+        node = str(cmd.get("node", ""))
+        if node in pol.trusted_nodes:
+            pol.trusted_nodes.remove(node)
+            C.save(self.cfg)
+        await session.send({"event": "untrusted", "node": node, "trusted_nodes": pol.trusted_nodes})
 
     async def _on_connect_response(self, m: dict) -> None:
         rid = str(m["request_id"])
