@@ -718,20 +718,40 @@ async def _handle(req: dict) -> dict | None:
     return None
 
 
-async def _eager_register() -> None:
-    """Connect to the daemon at startup so this session appears in peers / the
-    status line immediately — without waiting for the first tool call."""
+def _is_background_spare() -> bool:
+    """True if launched under a pre-warmed Claude "background spare" process.
+
+    Claude Code keeps spare processes ready; with alwaysLoad they each start this
+    MCP server. They are NOT real sessions, so registering them would create
+    phantom entries. Linux-only (/proc) check; elsewhere we assume a real session.
+    """
     try:
-        await _connected_client()
-        log.info("registered session %s with daemon", _client.session_id)
-    except Exception as exc:  # noqa: BLE001 — best-effort
-        log.warning("eager register failed (will retry on first tool use): %s", exc)
+        with open(f"/proc/{os.getppid()}/cmdline", "rb") as fh:
+            cmdline = fh.read().replace(b"\x00", b" ").decode("utf-8", "ignore")
+        return "--bg-spare" in cmdline
+    except Exception:
+        return False
+
+
+async def _keepalive() -> None:
+    """Register this real session with the daemon at startup, and re-register if
+    the daemon restarts — so it appears in peers / the status line without a tool
+    call. Background-spare processes are skipped to avoid phantom sessions."""
+    if _is_background_spare():
+        log.info("background-spare process; not registering with the daemon")
+        return
+    while True:
+        try:
+            await _connected_client()
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            log.debug("keepalive connect failed: %s", exc)
+        await asyncio.sleep(15)
 
 
 async def _serve_stdio() -> None:
     loop = asyncio.get_running_loop()
     log.info("agentsync MCP server up (stdlib stdio; socket=%s label=%s)", SOCKET_PATH, SESSION_LABEL)
-    asyncio.create_task(_eager_register())
+    asyncio.create_task(_keepalive())
     while True:
         line = await loop.run_in_executor(None, sys.stdin.buffer.readline)
         if not line:
