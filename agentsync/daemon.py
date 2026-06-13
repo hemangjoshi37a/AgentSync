@@ -107,8 +107,19 @@ class Daemon:
 
     async def start(self) -> None:
         path = str(C.SOCKET_PATH)
-        if await self._already_running(path):
-            log.info("another AgentSync daemon already owns %s — exiting", path)
+        C.ensure_dir()
+        # Race-free singleton: hold an exclusive file lock for our whole lifetime.
+        # If two sessions bootstrap a daemon at the same instant, the loser fails
+        # to acquire the lock and exits — so the socket is never hijacked and two
+        # daemons can never run at once (the bug that split sessions across daemons
+        # and caused phantom peers + transient "daemon off").
+        import fcntl
+
+        self._lock_fh = open(C.CONFIG_DIR / "daemon.lock", "w")
+        try:
+            fcntl.flock(self._lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            log.info("another AgentSync daemon holds the lock — exiting")
             return
         try:
             os.unlink(path)
