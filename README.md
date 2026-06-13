@@ -101,41 +101,35 @@ directly over the Unix socket — the relay isn't involved at all.
 
 ## Quickstart
 
-> Alpha (v0.1) — see [Status](#status). Two parts: the **Claude Code plugin** (gives a
-> session the `agentsync_*` tools) and the **node daemon** (the local hub the plugin
-> talks to).
+> Alpha (v0.1) — see [Status](#status).
 
-**1. Install the plugin** — inside Claude Code:
+**Local (same machine) — just install the plugin.** Inside Claude Code:
 
 ```text
 /plugin marketplace add hemangjoshi37a/AgentSync
 /plugin install agentsync@agentsync-marketplace
-/help     # the /agentsync-* commands now appear
 ```
 
-**2. Install + start the daemon** — in a terminal:
+That's the entire setup. On session start the plugin **auto-starts a small background
+daemon** (pure standard library — no `pip install`, no `agentsync up`), so any two Claude
+Code sessions on this machine can immediately reach each other. Just ask your session to
+use the `agentsync_*` tools (or `/agentsync-peers`, `/agentsync-ask <id> <question>`).
+The plugin's MCP server needs the `mcp` Python package importable by `python3`
+(see [docs/install.md](docs/install.md)).
+
+**Remote (different machines)** needs a relay both can dial out to (AnyDesk-style). Install
+the CLI from source (for the relay + optional auto-responder), run a relay, and point each
+node at it:
 
 ```bash
-# not on PyPI yet → from source:
 git clone https://github.com/hemangjoshi37a/AgentSync.git && cd AgentSync && pipx install .
-agentsync up      # prints your AgentSync ID (AS-XXXX-XXXX) and opens the TUI console
-```
-
-That is everything you need to bridge two Claude Code sessions **on the same machine**.
-(The plugin's MCP server needs the `mcp` Python package available to `python3` — see
-[docs/install.md](docs/install.md).)
-
-**3. For remote (different machines)** — run one relay both can dial out to, then on each node:
-
-```bash
-agentsync-relay                              # on the relay host (listens on :8787)
+agentsync-relay                              # on a host both machines can reach (:8787)
 agentsync set-relay wss://your-relay:8787    # on each node
-agentsync up
 ```
 
 Then, inside any Claude Code session, just ask it to *"connect to AS-…-B and ask them
 which file format their service expects"* — it uses the `agentsync_*` tools, the other
-side consents in its TUI, and the two agents talk.
+side consents (once, or permanently via `agentsync trust <id>`), and the two agents talk.
 
 ## Security model
 
@@ -171,8 +165,11 @@ the other machine — is powerful and must be treated as a real attack surface.
 | Claude Code plugin (MCP tools + hooks + slash commands) | ✅ done |
 | Headless responder + security policy | ✅ done |
 | Plugin marketplace manifest | ✅ done |
-| End-to-end tested — local + remote (automated) | ✅ passing |
-| Published to GitHub / PyPI | ⏳ pending |
+| Zero-setup install (plugin auto-starts a stdlib daemon — no `pip install`) | ✅ done |
+| Persistent trusted-peer consent (`agentsync trust`) | ✅ done |
+| Battle-tested — stress suite + real Claude Code sessions (auto-start + 2-way comms) | ✅ passing |
+| Published to GitHub | ✅ live |
+| Published to PyPI | ⏳ pending |
 
 ## Roadmap
 
