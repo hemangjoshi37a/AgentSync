@@ -24,6 +24,5 @@
         "${CLAUDE_PLUGIN_ROOT}/mcp/server.py"
       ]
     }
-  },
-  "hooks": "./hooks/hooks.json"
+  }
 }
