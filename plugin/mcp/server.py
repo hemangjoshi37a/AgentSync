@@ -718,9 +718,20 @@ async def _handle(req: dict) -> dict | None:
     return None
 
 
+async def _eager_register() -> None:
+    """Connect to the daemon at startup so this session appears in peers / the
+    status line immediately — without waiting for the first tool call."""
+    try:
+        await _connected_client()
+        log.info("registered session %s with daemon", _client.session_id)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        log.warning("eager register failed (will retry on first tool use): %s", exc)
+
+
 async def _serve_stdio() -> None:
     loop = asyncio.get_running_loop()
     log.info("agentsync MCP server up (stdlib stdio; socket=%s label=%s)", SOCKET_PATH, SESSION_LABEL)
+    asyncio.create_task(_eager_register())
     while True:
         line = await loop.run_in_executor(None, sys.stdin.buffer.readline)
         if not line:
