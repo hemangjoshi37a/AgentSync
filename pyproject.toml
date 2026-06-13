@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentsync"
+version = "0.1.0"
+description = "AnyDesk for Claude Code sessions — connect any two Claude Code sessions (local or remote) with a consent handshake and bidirectional, human-in-the-loop querying."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Hemang Joshi", email = "hemangjoshi37a@gmail.com" }]
+keywords = ["claude", "claude-code", "mcp", "agent", "ai", "remote", "relay", "anydesk", "p2p"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Communications",
+]
+dependencies = [
+  "websockets>=12.0,<13",
+  "textual>=0.60",
+  "pynacl>=1.5",
+  "rich>=13.0",
+  "mcp>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.5", "mypy>=1.10"]
+
+[project.scripts]
+agentsync = "agentsync.cli:main"
+agentsync-relay = "agentsync.relay.server:main"
+agentsync-responder = "agentsync.responder:main"
+
+[project.urls]
+Homepage = "https://github.com/hemangjoshi37a/AgentSync"
+Repository = "https://github.com/hemangjoshi37a/AgentSync"
+Issues = "https://github.com/hemangjoshi37a/AgentSync/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentsync"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

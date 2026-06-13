@@ -1,0 +1,31 @@
+{
+  "name": "agentsync-marketplace",
+  "displayName": "AgentSync",
+  "description": "AnyDesk for Claude Code sessions — connect any two Claude Code sessions (local or remote) with a consent handshake and bidirectional, human-in-the-loop querying.",
+  "owner": {
+    "name": "Hemang Joshi",
+    "email": "hemangjoshi37a@gmail.com",
+    "url": "https://github.com/hemangjoshi37a"
+  },
+  "plugins": [
+    {
+      "name": "agentsync",
+      "source": "./plugin",
+      "description": "Connect this Claude Code session to others (local or remote) — ask peers questions and exchange messages, with consent and human-in-the-loop control.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Hemang Joshi",
+        "email": "hemangjoshi37a@gmail.com"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/hemangjoshi37a/AgentSync",
+      "keywords": [
+        "claude-code",
+        "mcp",
+        "relay",
+        "agent",
+        "interconnect"
+      ]
+    }
+  ]
+}

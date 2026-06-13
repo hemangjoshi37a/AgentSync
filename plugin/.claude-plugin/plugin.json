@@ -1,0 +1,29 @@
+{
+  "name": "agentsync",
+  "displayName": "AgentSync",
+  "version": "0.1.0",
+  "description": "Connect this Claude Code session to others (local or remote) — ask peers questions and exchange messages, with consent and human-in-the-loop control.",
+  "author": {
+    "name": "Hemang Joshi",
+    "email": "hemangjoshi37a@gmail.com"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/hemangjoshi37a/AgentSync",
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "relay",
+    "agent",
+    "interconnect"
+  ],
+  "mcpServers": {
+    "bridge": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/mcp/server.py"
+      ]
+    }
+  },
+  "hooks": "./hooks/hooks.json"
+}
