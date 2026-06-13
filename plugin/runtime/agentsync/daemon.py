@@ -90,7 +90,8 @@ class Daemon:
         self.pending_connect: dict[str, tuple[Session, str]] = {}
         # request_id -> inbound connect_request awaiting consent
         self.pending_consent: dict[str, dict] = {}
-        self._counter = 0
+        self._counter = 0       # real sessions -> s1, s2, ...
+        self._ctrl_counter = 0  # control conns (status line, hooks) -> c1, c2, ...
 
     # ---- lifecycle ----------------------------------------------------------
 
@@ -169,9 +170,17 @@ class Daemon:
         c = cmd.get("cmd")
 
         if c == "hello":
-            self._counter += 1
-            sid = f"s{self._counter}"
-            session = Session(sid, writer, str(cmd.get("label", "claude")), str(cmd.get("role", "session")), str(cmd.get("cwd", "")))
+            role = str(cmd.get("role", "session"))
+            # Only real sessions consume the s-counter; short-lived control
+            # connections (status line polls every few seconds, hooks) get their
+            # own c-counter so they never inflate the session numbering.
+            if role == "session":
+                self._counter += 1
+                sid = f"s{self._counter}"
+            else:
+                self._ctrl_counter += 1
+                sid = f"c{self._ctrl_counter}"
+            session = Session(sid, writer, str(cmd.get("label", "claude")), role, str(cmd.get("cwd", "")))
             self.sessions[sid] = session
             await session.send({"event": "welcome", "session_id": sid, "node_id": self.node_id, "label": session.label})
             await self._broadcast_peers()

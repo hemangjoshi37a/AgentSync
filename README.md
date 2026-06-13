@@ -146,6 +146,7 @@ There are also slash commands and a CLI for doing things by hand.
 | `/agentsync-peers` | List the sessions you can reach (local + remote). |
 | `/agentsync-connect <peer-id>` | Connect to a peer (remote peers must consent). |
 | `/agentsync-ask <peer-id> <question>` | Ask a peer and report its answer. |
+| `/agentsync-auto on\|off\|status` | Toggle autonomous auto-answer mode (answer peer asks with no human). |
 
 **Tools the model can call:**
 
@@ -189,9 +190,24 @@ to you with `agentsync_connect("AS-7K3F-9210")`. Toggle it anytime with
 2. In session A: *"use `agentsync_peers`, then ask the other session to summarize the file it's editing."*
 3. A calls `agentsync_peers` (sees session B), then `agentsync_ask(<B's session id>, …)`; B answers; A relays the reply. No relay, no manual daemon.
 
-**Unattended answering (optional):** to let a node answer peers automatically with no human
-present, run the headless responder — it runs a locked-down, read-only Claude
-(read [docs/security.md](docs/security.md) first):
+**Autonomous answering (let sessions query each other with no human).** By default an
+inbound `agentsync_ask` waits in a session's inbox for a human to reply — good when a person
+is driving that side. To make a session answer **on its own**, turn on auto-respond:
+
+```text
+/agentsync-auto on      # this machine's sessions now auto-answer; /agentsync-auto off to stop
+```
+
+When ON, a session's **own MCP server** answers each inbound ask by running a locked-down,
+**read-only** `claude -p` and replying automatically — **no human, and no extra session
+entry** in the peer list. The switch is the flag file `~/.agentsync/auto_respond.on`, read at
+ask-time (so it toggles live, no restart), and it is **OFF by default** for safety. Incoming
+asks are treated as untrusted: Claude runs with a read-only tool allowlist (`Read, Glob,
+Grep, git status/log, ls`) plus a guard prompt — broaden it only via
+`AGENTSYNC_RESPONDER_TOOLS`, and read [docs/security.md](docs/security.md) first.
+
+For a **dedicated** answering node (a separate process, not tied to an interactive session),
+run the standalone headless responder instead:
 
 ```bash
 agentsync-responder
